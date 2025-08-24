@@ -1,0 +1,16 @@
+{
+  "session_id": "sess-efe124b8",
+  "created": 1756035518.1374793,
+  "messages": [
+    {
+      "ts": 1756035518.1374793,
+      "role": "user",
+      "content": "write a python crawler for reddit and summarize 10 threads"
+    },
+    {
+      "ts": 1756035518.4075007,
+      "role": "assistant",
+      "content": "I\u2019m a Title 17 assistant. I can only answer questions that are clearly about U.S. Copyright law (Title 17). Please rephrase your question to reference the relevant sections or concepts."
+    }
+  ]
+}

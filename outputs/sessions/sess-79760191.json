@@ -1,0 +1,16 @@
+{
+  "session_id": "sess-79760191",
+  "created": 1756035311.4699295,
+  "messages": [
+    {
+      "ts": 1756035311.4699295,
+      "role": "user",
+      "content": "I need (1) the fair use factors under \u00a7107, (2) a short compare/contrast with \u00a7110 exemptions, and (3) a 5-bullet summary of \u00a7114 performance rights caveat. End with page ranges."
+    },
+    {
+      "ts": 1756035427.6618576,
+      "role": "assistant",
+      "content": "Answer:\n- The four fair use factors are: copying purpose and character, copyri > (2) A performance or display of a work in a performance or display made without authorization under subsection (a)(1); (3) A transmission of a performance or display made without authorization under paragraph (1); and (4) A transmission of a performance or display that would be an indirect transmission of private home viewing under subparagraph (B)). \n\nCompare/Contrast:\nThe fair use doctrine allows certain activities that might infringe copyrights if done directly, but protects them if performed indirectly or incidental to another permitted activity. This exemption applies to specific works and conditions, such as educational and non-commercial use.\nSummarize (5 bullets):\n- A direct performance or display of a work is not considered an infringement if it meets certain conditions, such as public performance, non-commercial use, and three exceptions."
+    }
+  ]
+}
