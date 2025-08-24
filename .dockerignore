@@ -1,0 +1,13 @@
+# .dockerignore
+.git
+**/__pycache__/
+**/*.py[cod]
+*.ipynb_checkpoints
+.venv
+.env
+.DS_Store
+
+# Large, regenerated, or host-only assets
+outputs/
+models/
+data/chunks/
