@@ -1,1 +1,62 @@
 # LoRA/QLoRA on Llama3.1-8B
+# LoRA/QLoRA on Llama3.1-8B
+# Minimal QLoRA on Llama 3.1 8B Instruct (requires HF access + GPU).
+# If you don't have HF access/GPU, skip Track A for now.
+
+base_model: meta-llama/Meta-Llama-3.1-8B-Instruct
+load_in_4bit: true
+bnb_4bit_compute_dtype: float16
+bnb_4bit_use_double_quant: true
+bnb_4bit_quant_type: nf4
+
+trust_remote_code: true
+gradient_checkpointing: true
+flash_attention: false
+
+# LoRA
+peft_type: lora
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# Data (your chat-format JSONL built earlier)
+datasets:
+  - path: data/sft/train.jsonl
+    type: chat
+  - path: data/sft/dev.jsonl
+    type: chat
+dataset_preload: false
+val_set_size: 0
+eval_steps: 100
+
+# Prompting (keep the model’s native chat style)
+chat_template: llama-3-instruct
+train_on_inputs: false
+sequence_len: 4096
+
+# Training
+micro_batch_size: 1
+gradient_accumulation_steps: 16
+optim: adamw_torch
+learning_rate: 1.5e-4
+lr_scheduler: cosine
+warmup_steps: 25
+weight_decay: 0.0
+max_grad_norm: 1.0
+num_epochs: 1
+
+# Logging / output
+output_dir: outputs/lora
+save_steps: 200
+save_total_limit: 2
+logging_steps: 10
+bf16: false
+fp16: true
