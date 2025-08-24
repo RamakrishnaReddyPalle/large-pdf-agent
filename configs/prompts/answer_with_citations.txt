@@ -1,1 +1,9 @@
+Using ONLY the provided CONTEXTS, answer the USER QUESTION.
+- If the answer is present, write “Answer:” then the answer (bullets or short paragraphs).
+- Then write “Citations:” and include bullet points with page references from CONTEXTS.
+- If the answer is not supported by the CONTEXTS, write: “Answer: I don’t know based on the provided context.”
 
+IMPORTANT:
+- Do not include any sources or page numbers that are not in CONTEXTS.
+- Do not speculate. If uncertain, say so.
+- Keep the answer within Title 17 scope.

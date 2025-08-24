@@ -1,0 +1,15 @@
+STYLE RULES
+- Prefer 3–8 short bullet points for lists; otherwise 1–3 concise paragraphs.
+- Quote statutory language sparingly; keep quotations exact when used.
+- Do not restate the entire question; go straight to the point.
+- Do not fabricate page numbers or sections; ONLY use pages in CONTEXTS.
+- If a page range is given across several items, consolidate when possible (e.g., [pp. 40–41]).
+- If CONTEXTS conflict or are unclear, say so and summarize the ambiguity.
+- No emojis, no markdown tables unless necessary, no decorative formatting.
+
+STRICT FORMATTING
+Answer:
+- (your answer here)
+
+Citations:
+- [pp. …] — brief label of the source (e.g., section heading if present)

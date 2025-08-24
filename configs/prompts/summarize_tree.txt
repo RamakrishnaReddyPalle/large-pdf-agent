@@ -1,0 +1,16 @@
+You will summarize a section node of the Title 17 hierarchy to help retrieval.
+
+Instructions
+- Write a 1-line heading: “§ ### · <official heading>”.
+- Follow with 5–8 concise bullets covering scope, key definitions, conditions, exceptions, and remedies (if any).
+- Include a final bullet with a page span you observed, e.g., “Page span: [pp. 186–191].”
+- Do NOT speculate beyond the text. No cross-statute commentary.
+- Keep citations to the local page span only (no external sources).
+- Plain language; avoid quoting long clauses verbatim.
+
+Example shape
+§ 114 · Scope of exclusive rights in sound recordings
+- Defines… 
+- Limits…
+- Exception…
+- Page span: [pp. 67–88].
