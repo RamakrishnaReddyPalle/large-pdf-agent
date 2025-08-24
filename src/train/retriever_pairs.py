@@ -1,93 +1,291 @@
-# pos/neg mining
+# src/train/retriever_pairs.py
 from __future__ import annotations
-import json, random, argparse
+import argparse, json, re
 from pathlib import Path
-from typing import List, Dict, Any
-import chromadb
+from typing import List, Dict, Any, Iterable, Tuple, Set
 
-def _read_jsonl(p: Path) -> List[Dict[str,Any]]:
-    return [json.loads(l) for l in open(p, "r", encoding="utf-8") if l.strip()]
+import tqdm
+from rank_bm25 import BM25Okapi
 
-def mine_pairs(index_dir: Path,
-               chunks_path: Path,
-               qa_path: Path,
-               out_path: Path,
-               n_per_q: int = 4,
-               k_candidates: int = 12,
-               seed: int = 7) -> Path:
-    random.seed(seed)
+TOKEN_RE = re.compile(r"[A-Za-z0-9_]+", re.UNICODE)
 
-    # Load QA questions as queries
-    qa = _read_jsonl(qa_path)
-    queries = []
-    for r in qa:
-        q = (r.get("question") or "").strip()
-        if q:
-            queries.append({"q": q, "section": r.get("section","")})
+# Matches things like:
+# [pp. 88–92], [pp. 189-201], [pp 10-11], [p. 67], [pages 12–14]
+PP_RE = re.compile(
+    r"\[(?:pp?\.?|pages?)\s*([0-9]{1,4})\s*(?:[-–—]\s*([0-9]{1,4}))?\s*\]",
+    flags=re.IGNORECASE,
+)
 
-    # Open Chroma
-    client = chromadb.PersistentClient(path=str(index_dir))
-    # If you used collection_name==doc_id, grab the first collection
-    cols = client.list_collections()
-    if not cols:
-        raise RuntimeError("No Chroma collections found.")
-    coll = client.get_collection(cols[0].name)
+# Optional: extract "Heading: ..." lines (not required, but handy for meta)
+HEADING_RE = re.compile(r"^Heading:\s*(.+)$", flags=re.IGNORECASE | re.MULTILINE)
 
-    # Build pairs
-    pairs = []
-    for item in queries:
-        res = coll.query(query_texts=[item["q"]], n_results=k_candidates,
-                         include=["documents","metadatas","distances"])
-        docs   = res["documents"][0]
-        metas  = res["metadatas"][0]
+def read_jsonl(p: Path) -> Iterable[Dict[str, Any]]:
+    with open(p, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except Exception:
+                continue
 
-        # Heuristic: top-1 as positive if it's not a heading/TOC
-        pos_idx = None
-        for i,(d,m) in enumerate(zip(docs, metas)):
-            if (m.get("block_type") != "heading") and "|" not in d:
-                pos_idx = i; break
-        if pos_idx is None:  # fall back to 0
-            pos_idx = 0
-
-        pos_doc = docs[pos_idx]
-        pos_meta = metas[pos_idx]
-
-        # Negatives: next few non-identical docs
-        negs = []
-        for i,(d,m) in enumerate(zip(docs, metas)):
-            if i == pos_idx: continue
-            if m.get("id") == pos_meta.get("id"): continue
-            if m.get("block_type") == "heading": continue
-            negs.append((d,m))
-            if len(negs) >= n_per_q: break
-
-        # Save one positive + N negatives
-        if negs:
-            pairs.append({
-                "query": item["q"],
-                "positive": {"text": pos_doc, "meta": pos_meta},
-                "negatives": [{"text": d, "meta": m} for d,m in negs],
-            })
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        for r in pairs:
+def write_jsonl(rows: Iterable[Dict[str, Any]], p: Path):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    print(f"[OK] wrote {len(pairs)} pairs → {out_path}")
-    return out_path
+
+def tokenize(s: str) -> List[str]:
+    return [t.lower() for t in TOKEN_RE.findall(s or "")]
+
+def load_chunks(chunks_dir: Path) -> List[Dict[str, Any]]:
+    """
+    Expect *.jsonl with fields:
+      - 'text' (or 'content')
+      - optional 'page' (int) or 'pages' (list[int])
+      - optional 'section'
+    """
+    rows: List[Dict[str, Any]] = []
+    for fp in sorted(chunks_dir.glob("*.jsonl")):
+        for idx, r in enumerate(read_jsonl(fp)):
+            text = r.get("text") or r.get("content") or ""
+            if not isinstance(text, str) or not text.strip():
+                continue
+            page_set: Set[int] = set()
+            page = r.get("page")
+            if isinstance(page, int):
+                page_set.add(page)
+            pages = r.get("pages")
+            if isinstance(pages, list):
+                for p in pages:
+                    if isinstance(p, int):
+                        page_set.add(p)
+            rows.append({
+                "id": r.get("id") or f"{fp.name}:{idx}",
+                "text": text,
+                "section": r.get("section") or "",
+                "pages": page_set,
+            })
+    return rows
+
+def build_bm25(corpus_texts: List[str]) -> Tuple[BM25Okapi, List[List[str]]]:
+    tokenized = [tokenize(t) for t in corpus_texts]
+    return BM25Okapi(tokenized), tokenized
+
+def parse_pages_from_text(s: str) -> List[int]:
+    """
+    Extract page numbers from patterns like:
+    [pp. 88–92], [pp. 189-201], [p. 67], [pages 12–14]
+    Returns deduplicated sorted list of ints.
+    """
+    pages: Set[int] = set()
+    for m in PP_RE.finditer(s or ""):
+        a = m.group(1)
+        b = m.group(2)
+        try:
+            start = int(a)
+            if b is not None:
+                end = int(b)
+                if end < start:
+                    start, end = end, start
+                for p in range(start, end + 1):
+                    pages.add(p)
+            else:
+                pages.add(start)
+        except Exception:
+            continue
+    return sorted(pages)
+
+def overlap_pages(a: Iterable[int], b: Iterable[int]) -> bool:
+    sa, sb = set(a), set(b)
+    return len(sa & sb) > 0
+
+def extract_from_row(ex: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize any SFT row into:
+      { 'query': str, 'answer': str, 'pages': List[int], 'section': str }
+
+    Supports:
+      A) Your chat format:
+         - messages: list[ {role, content} ] (system + user)
+         - response: assistant text
+         Pages are parsed from the user content (e.g., "[pp. 88–92]").
+      B) Chat format with assistant message in messages (fallback).
+      C) Alpaca: instruction/input/output.
+      D) QA: question/answer/pages/section.
+    """
+    query, answer, pages, section = "", "", [], ""
+
+    # A) Your chat format (messages + response)
+    msgs = ex.get("messages")
+    resp = ex.get("response")
+    if isinstance(msgs, list):
+        # last user message becomes the query
+        last_user = ""
+        for m in msgs:
+            role = (m.get("role") or "").lower()
+            content = (m.get("content") or "").strip()
+            if role == "user":
+                last_user = content
+        if last_user:
+            query = last_user
+            pages = parse_pages_from_text(last_user)
+            # Optional section from "Heading: ..." inside query
+            m = HEADING_RE.search(last_user)
+            if m:
+                section = (m.group(1) or "").strip()
+        # answer from 'response' field if present
+        if isinstance(resp, str) and resp.strip():
+            answer = resp.strip()
+        else:
+            # B) fallback to last assistant in messages
+            last_assistant = ""
+            for m in msgs:
+                role = (m.get("role") or "").lower()
+                if role == "assistant":
+                    last_assistant = (m.get("content") or "").strip()
+            answer = last_assistant
+        if query:
+            return {"query": query, "answer": answer, "pages": pages, "section": section}
+
+    # C) Alpaca-style
+    if isinstance(ex.get("instruction"), str) or isinstance(ex.get("output"), str):
+        instr = (ex.get("instruction") or "").strip()
+        inp   = (ex.get("input") or "").strip()
+        query = f"{instr}\n{inp}".strip() if inp else instr
+        answer = (ex.get("output") or "").strip()
+        pages = parse_pages_from_text(query)
+        m = HEADING_RE.search(query)
+        if m:
+            section = (m.group(1) or "").strip()
+        if query:
+            return {"query": query, "answer": answer, "pages": pages, "section": section}
+
+    # D) QA-style
+    if isinstance(ex.get("question"), str) or isinstance(ex.get("answer"), str):
+        query = (ex.get("question") or "").strip()
+        answer = (ex.get("answer") or "").strip()
+        if isinstance(ex.get("pages"), list):
+            pages = [p for p in ex["pages"] if isinstance(p, int)]
+        else:
+            pages = parse_pages_from_text(query)
+        section = (ex.get("section") or "").strip()
+        if query:
+            return {"query": query, "answer": answer, "pages": pages, "section": section}
+
+    return {"query": "", "answer": "", "pages": [], "section": ""}
+
+def mine_pairs(
+    sft_path: Path,
+    chunks: List[Dict[str, Any]],
+    topk: int = 30,
+    negatives_per_query: int = 4,
+    prefer_page_overlap: bool = True,
+    min_query_len: int = 12,
+) -> List[Dict[str, Any]]:
+    bm25, _ = build_bm25([c["text"] for c in chunks])
+
+    stats = {"total": 0, "kept": 0, "skipped_short": 0,
+             "picked_page": 0, "picked_substr": 0, "picked_top1": 0}
+
+    out: List[Dict[str, Any]] = []
+
+    for ex in tqdm.tqdm(list(read_jsonl(sft_path)), desc=f"Mining from {sft_path.name}"):
+        stats["total"] += 1
+        parsed = extract_from_row(ex)
+        q = parsed["query"]
+        ans = parsed["answer"]
+        gold_pages = set(parsed["pages"])
+
+        if not isinstance(q, str) or len(q.strip()) < min_query_len:
+            stats["skipped_short"] += 1
+            continue
+
+        q_tokens = tokenize(q)
+        scores = bm25.get_scores(q_tokens)
+        order = sorted(range(len(chunks)), key=lambda i: scores[i], reverse=True)[:max(1, topk)]
+
+        pos_idx = None
+
+        # (1) prefer page overlap if we have gold pages and chunks have pages
+        if prefer_page_overlap and gold_pages:
+            for i in order:
+                if chunks[i]["pages"] and overlap_pages(chunks[i]["pages"], gold_pages):
+                    pos_idx = i
+                    stats["picked_page"] += 1
+                    break
+
+        # (2) answer substring heuristic
+        if pos_idx is None and isinstance(ans, str) and len(ans.strip()) >= 12:
+            ans_low = ans.lower()
+            for i in order:
+                if ans_low in chunks[i]["text"].lower():
+                    pos_idx = i
+                    stats["picked_substr"] += 1
+                    break
+
+        # (3) fallback top-1
+        if pos_idx is None and order:
+            pos_idx = order[0]
+            stats["picked_top1"] += 1
+
+        pos_text = chunks[pos_idx]["text"]
+        negs = []
+        for i in order:
+            if i == pos_idx:
+                continue
+            negs.append(chunks[i]["text"])
+            if len(negs) >= negatives_per_query:
+                break
+
+        out.append({
+            "query": q,
+            "positive": pos_text,
+            "negatives": negs,
+            "meta": {
+                "section": parsed["section"],
+                "gold_pages": sorted(list(gold_pages)),
+                "pos_chunk_id": chunks[pos_idx]["id"],
+                "pos_reason": ("page" if stats["picked_page"] else
+                               ("substr" if stats["picked_substr"] else "top1"))
+            }
+        })
+        stats["kept"] += 1
+
+    print(
+        f"[stats] kept={stats['kept']}/{stats['total']} | skipped_short={stats['skipped_short']} | "
+        f"page={stats['picked_page']} | substr={stats['picked_substr']} | top1={stats['picked_top1']}"
+    )
+    return out
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--index", default="data/index")
-    ap.add_argument("--chunks", default="data/chunks/chunks.jsonl")
-    ap.add_argument("--qa", default="data/sft/qa.v3b.jsonl")
-    ap.add_argument("--out", default="data/pairs/pairs.jsonl")
-    ap.add_argument("--n_per_q", type=int, default=4)
-    ap.add_argument("--k_candidates", type=int, default=12)
-    ap.add_argument("--seed", type=int, default=7)
-    a = ap.parse_args()
-    mine_pairs(Path(a.index), Path(a.chunks), Path(a.qa), Path(a.out),
-               n_per_q=a.n_per_q, k_candidates=a.k_candidates, seed=a.seed)
+    ap.add_argument("--chunks_dir", type=str, default="data/chunks")
+    ap.add_argument("--train_jsonl", type=str, default="data/sft/train.jsonl")
+    ap.add_argument("--dev_jsonl",   type=str, default="data/sft/dev.jsonl")
+    ap.add_argument("--out_dir",     type=str, default="data/pairs")
+    ap.add_argument("--topk", type=int, default=30)
+    ap.add_argument("--neg_per_q", type=int, default=4)
+    ap.add_argument("--min_query_len", type=int, default=12)
+    args = ap.parse_args()
+
+    chunks = load_chunks(Path(args.chunks_dir))
+    assert chunks, f"No chunks found under {args.chunks_dir}"
+    print(f"[info] loaded {len(chunks)} chunks")
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if Path(args.train_jsonl).exists():
+        train_pairs = mine_pairs(Path(args.train_jsonl), chunks, args.topk, args.neg_per_q, True, args.min_query_len)
+        write_jsonl(train_pairs, out_dir / "train.pairs.jsonl")
+        print(f"[OK] wrote {len(train_pairs)} train pairs → {out_dir/'train.pairs.jsonl'}")
+
+    if Path(args.dev_jsonl).exists():
+        dev_pairs = mine_pairs(Path(args.dev_jsonl), chunks, args.topk, args.neg_per_q, True, args.min_query_len)
+        write_jsonl(dev_pairs, out_dir / "dev.pairs.jsonl")
+        print(f"[OK] wrote {len(dev_pairs)} dev pairs → {out_dir/'dev.pairs.jsonl'}")
 
 if __name__ == "__main__":
     main()
