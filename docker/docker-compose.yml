@@ -1,0 +1,51 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: title17-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"   # Ollama API
+      - "7860:7860"     # Gradio UI forwarded from app container (shared netns)
+    volumes:
+      - ollama:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cpu
+    container_name: title17-app
+    depends_on:
+      - ollama
+    # Make localhost:11434 inside "app" point to this "ollama" service
+    network_mode: "service:ollama"
+    environment:
+      - GRADIO_SERVER_PORT=7860
+      - TITLE17_BASE_MODEL_DIR=/app/models/Qwen2.5-1.5B-Instruct
+      - TITLE17_ADAPTER_DIR=/app/outputs/lora_hf/title17/adapter
+      - TITLE17_RERANKER_DIR=/app/outputs/reranker/title17
+      - TITLE17_GRAPH_DIR=/app/outputs/graph/graph
+      - TITLE17_CHUNKS_DIR=/app/data/chunks
+      - TITLE17_PROMPTS_DIR=/app/configs/prompts
+      - TITLE17_SESSIONS_DIR=/app/outputs/sessions
+      - TITLE17_LOGS_DIR=/app/outputs/logs
+      - TITLE17_SQLITE_PATH=/app/outputs/logs/agent.sqlite
+      - TITLE17_MAX_NEW_TOKENS=320
+      - TITLE17_TEMPERATURE=0.1
+      - TITLE17_OLLAMA_SUMMARIZER=llama3.2:latest
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+      - app_outputs:/app/outputs
+      - app_sessions:/app/outputs/sessions
+      # Optional host bind mounts if you want to supply assets from host:
+      - ../models:/app/models:ro
+      - ../outputs:/app/outputs
+      - ../data:/app/data:ro
+      - ../configs/prompts:/app/configs/prompts:ro
+
+volumes:
+  ollama:
+  hf_cache:
+  app_outputs:
+  app_sessions:

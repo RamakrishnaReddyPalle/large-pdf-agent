@@ -1,1 +1,39 @@
+# docker/Dockerfile.cpu
+FROM python:3.11-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# System deps (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl build-essential libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ---- Python deps first (better cache; note the quotes around <5) ----
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir \
+      "torch==2.4.0" \
+      "transformers>=4.43,<5" \
+      "accelerate>=0.31" \
+      "peft>=0.11" \
+      "sentence-transformers>=2.2.2" \
+      "datasets>=2.19" \
+      "rank-bm25>=0.2.2" \
+      "langchain>=0.3.2" \
+      "langchain-community==0.3.2" \
+      "langchain-ollama>=0.1.0" \
+      "gradio>=4.44,<5" \
+      "pydantic>=2.7" \
+      "requests>=2.31" \
+      "numpy>=1.26"
+
+# ---- Copy code last ----
+COPY . /app
+
+EXPOSE 7860
+
+# Launch the Gradio UI by default
+CMD ["python", "-m", "src.ui.chat"]
