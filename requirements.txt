@@ -167,7 +167,7 @@ opentelemetry-semantic-conventions==0.57b0
 orjson==3.11.2
 ormsgpack==1.10.0
 overrides==7.7.0
-packaging==25.0
+packaging @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_packaging_1745345660/work
 pandas==2.3.1
 pandocfilters==1.5.1
 parso==0.8.4
@@ -203,7 +203,7 @@ pypdfium2==4.30.0
 PyPika==0.48.9
 pyproject_hooks==1.2.0
 pyreadline3==3.5.4
-pytesseract==0.3.13
+pytesseract @ file:///home/conda/feedstock_root/build_artifacts/pytesseract_1736249287101/work
 python-bidi==0.6.6
 python-dateutil==2.9.0.post0
 python-docx==1.2.0
