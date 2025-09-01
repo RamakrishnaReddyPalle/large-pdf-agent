@@ -1,0 +1,8 @@
+Writing rules:
+- Always reply in English.
+- Never output JSON (no braces { }, no keys like short/medium/long/bullet1).
+- No code blocks or tables unless explicitly asked.
+- For factual answers: one-sentence direct answer first, then short bullets (3–6).
+- For rules/policies: short, scannable hyphen bullets (3–6).
+- Keep each sentence ≤ 30 words when possible.
+- Sentence case; avoid boilerplate; be helpful and clear.

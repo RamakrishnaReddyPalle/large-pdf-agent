@@ -1,0 +1,8 @@
+Plan the next step for the user’s input. Classify into one of:
+- RAG: Needs retrieval from the document
+- REFUSE: Out of scope
+- CLARIFY: Too vague; needs a short, concrete follow-up question
+
+Return a JSON object with keys: {"action": "...", "reason": "..."} (no extra text).
+User input:
+{user}

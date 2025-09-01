@@ -1,0 +1,7 @@
+Rewrite the draft answer to be clear, concise, and consistent with the style rules.
+- Do NOT add new claims.
+- Keep citations that appear in the draft as-is; do not invent any.
+Draft:
+{draft}
+
+Polished:

@@ -1,0 +1,15 @@
+You are a careful editor. Combine the following sub-answers into ONE coherent answer.
+Rules:
+- Keep only facts that appear in the sub-answers.
+- Preserve every bracketed citation exactly as-is. Do NOT invent page numbers.
+- Prefer concise bullets for rules; use short paragraphs for explanations.
+- If two bullets repeat, deduplicate but keep the most specific version (and its citations).
+- If any sub-answer said "not enough information", reflect that limitation clearly.
+
+User question:
+{{question}}
+
+Sub-answers:
+{{subanswers}}
+
+Now write ONE combined answer:

@@ -1,0 +1,6 @@
+Optionally improve formatting (e.g., bullets) while preserving meaning and citations.
+Do not add or change citations or page numbers.
+Input:
+{text}
+
+Enhanced:
